@@ -1,0 +1,34 @@
+#!/bin/bash
+# 这里请根据实际项目进行设置
+cd $GOPATH/src/github.com/meshplus/crypto-gm
+
+st=0
+counter=0
+
+echo "1. gofmt.."
+find . -path '*/vendor/*' -prune -o -name '*.go' -type f -exec gofmt -s -w {} \;
+[ $? -ne 0 ] && exit 1
+
+echo "2. golangci-lint run.."
+export LOG_LEVEL=error
+for pkg in $(go list ./... | grep -v /vendor/); do
+    # echo "golangci-lint run ==> $pkg:"
+    golangci-lint run
+    rest=`golangci-lint run`
+    if [[ ! -z $rest ]]; then
+      # st=1;
+      # because of pn.go lint will never passed
+      echo "$rest" | grep -v '.pb.go'
+      counter=$((counter+1)) ;
+      if [[ $counter -gt 0 ]]; then
+         exit 1;
+         echo "too many golangci-lint run error..."
+         break;
+      fi
+    fi
+done
+unset LOG_LEVEL
+[ $st -ne 0 ] && exit 1
+
+# add formatted files
+git add -u
