@@ -5,8 +5,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"github.com/meshplus/crypto-gm/internal/sm3"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
