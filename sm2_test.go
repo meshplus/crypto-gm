@@ -67,7 +67,8 @@ func TestGenerateSM2KeyForDH(t *testing.T) {
 }
 func TestPrivateKeyBytes(t *testing.T) {
 	kvbs, _ := hex.DecodeString("12332132132131321321321300000000123321321321313213213213")
-	sk := new(SM2PrivateKey).FromBytes(kvbs)
+	sk := new(SM2PrivateKey)
+	assert.Nil(t, sk.FromBytes(kvbs, 0))
 	sk.CalculatePublicKey()
 
 	targetKvbs, _ := sk.Bytes()
@@ -76,10 +77,8 @@ func TestPrivateKeyBytes(t *testing.T) {
 	_, err := privKey.Bytes()
 	assert.NotNil(t, err)
 	testBytes := make([]byte, 33)
-	k := privKey.FromBytes(testBytes)
-	assert.Nil(t, k)
-	k = privKey.FromBytes(testBytes[:0])
-	assert.Nil(t, k)
+	assert.Equal(t, privKey.FromBytes(testBytes, 0).Error(), "key length is empty or too long")
+	assert.Equal(t, privKey.FromBytes(testBytes[:0], 0).Error(), "key length is empty or too long")
 	_, err = privKey.Bytes()
 	assert.NotNil(t, err)
 }
@@ -92,7 +91,7 @@ func TestSM2PublicKey_PublicKey(t *testing.T) {
 	assert.Equal(t, sk.K, zeroKey)
 	assert.Equal(t, sk.PublicKey.X, zeroKey)
 	assert.Equal(t, sk.PublicKey.Y, zeroKey)
-	sk = sk.FromBytes(keyBytes)
+	assert.Nil(t, sk.FromBytes(keyBytes, 0))
 	pk := sk.Public()
 	assert.NotEqual(t, pk.(*SM2PublicKey).X, zeroKey)
 	assert.NotEqual(t, pk.(*SM2PublicKey).Y, zeroKey)
@@ -105,7 +104,7 @@ func TestSignAndVerify(t *testing.T) {
 		assert.Nil(t, err)
 		pub := priv.PublicKey
 		h := HashBeforeSM2(&pub, []byte(msg))
-		s, err := priv.Sign(rand.Reader, h, nil)
+		s, err := priv.Sign(nil, h, rand.Reader)
 		assert.Nil(t, err)
 		b, err := pub.Verify(nil, s, h)
 		assert.True(t, b)
@@ -120,7 +119,8 @@ func TestPrivateKeyBytesAndFromBytes(t *testing.T) {
 		bs, err := priv.Bytes()
 		assert.Nil(t, err)
 
-		newPriv := new(SM2PrivateKey).FromBytes(bs)
+		newPriv := new(SM2PrivateKey)
+		assert.Nil(t, newPriv.FromBytes(bs, 0))
 
 		assert.Equal(t, priv.K, newPriv.K)
 	}
@@ -134,7 +134,8 @@ func TestPublicKeyBytesAndFromBytes(t *testing.T) {
 		bs, err := pub.Bytes()
 		assert.Nil(t, err)
 
-		newPub := new(SM2PublicKey).FromBytes(bs)
+		newPub := new(SM2PublicKey)
+		assert.Nil(t, newPub.FromBytes(bs, 0))
 
 		assert.Equal(t, newPub.X, pub.X)
 		assert.Equal(t, newPub.Y, pub.Y)
@@ -167,9 +168,9 @@ func TestGetPublicKey(t *testing.T) {
 	assert.Nil(t, err)
 
 	newPriv := new(SM2PrivateKey)
-	privKey := newPriv.FromBytes(bs)
+	assert.Nil(t, newPriv.FromBytes(bs, 0))
 
-	privateKey := privKey.CalculatePublicKey()
+	privateKey := newPriv.CalculatePublicKey()
 	pubKey := priv.PublicKey
 	newPubKey := privateKey.PublicKey
 	bytes, err := pubKey.Bytes()
@@ -178,7 +179,7 @@ func TestGetPublicKey(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, bytes, newBytes)
 
-	privateKey = privKey.SetPublicKey(&newPubKey)
+	privateKey = newPriv.SetPublicKey(&newPubKey)
 	newPubKey = privateKey.PublicKey
 	newBytes, err = newPubKey.Bytes()
 	assert.Nil(t, err)
@@ -197,7 +198,7 @@ func BenchmarkSign(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()
 		h1 := HashBeforeSM2(&pub, msg)
-		s, err := priv.Sign(rand.Reader, h1, nil)
+		s, err := priv.Sign(nil, h1, rand.Reader)
 		b.StopTimer()
 		assert.Nil(b, err)
 		h2 := HashBeforeSM2(&pub, msg)
@@ -216,7 +217,7 @@ func BenchmarkVerify(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		h1 := HashBeforeSM2(&pub, msg)
-		s, err := priv.Sign(rand.Reader, h1, nil)
+		s, err := priv.Sign(nil, h1, rand.Reader)
 		assert.Nil(b, err)
 		b.StartTimer()
 		h2 := HashBeforeSM2(&pub, msg)
@@ -256,18 +257,6 @@ func BenchmarkGenerateSM2KeyForDH(b *testing.B) {
 
 	}
 
-}
-func TestJudge(t *testing.T) {
-	priv, err := GenerateSM2Key()
-	assert.Nil(t, err)
-	assert.True(t, priv.Private())
-	assert.False(t, priv.Symmetric())
-	pub := priv.PublicKey
-	assert.False(t, pub.Private())
-	assert.False(t, pub.Symmetric())
-	pubPointer, err := pub.PublicKey()
-	assert.Nil(t, err)
-	assert.Equal(t, pubPointer, &pub)
 }
 
 func TestSignCase(t *testing.T) {
@@ -342,10 +331,11 @@ func TestSignCase(t *testing.T) {
 			sk, _ := hex.DecodeString(tt.args.sk)
 			got, _, err := sm2.Sign(dgst, bytes.NewReader(reader), sk)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Sign_64bit() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			pk := new(SM2PrivateKey).FromBytes(sk)
+			pk := new(SM2PrivateKey)
+			assert.Nil(t, pk.FromBytes(sk, 0))
 			assert.NotNil(t, pk, "can not get sk for bytes")
 			pk.CalculatePublicKey()
 			pkBytes, err := pk.PublicKey.Bytes()
@@ -431,7 +421,8 @@ func TestVerify(t *testing.T) {
 			pkBytes[0] = 0x04
 			pk2, _ := hex.DecodeString(tt.args.pk)
 			pkBytes = append(pkBytes, pk2...)
-			pk := new(SM2PublicKey).FromBytes(pkBytes)
+			pk := new(SM2PublicKey)
+			assert.Nil(t, pk.FromBytes(pkBytes, 0))
 			if pk == nil {
 				t.Errorf("can not get publick from %s\n", tt.args.pk)
 				return
@@ -441,7 +432,7 @@ func TestVerify(t *testing.T) {
 			sig := sm2.MarshalSig(sigBytes[:32], sigBytes[32:])
 			got, err := sm2.VerifySignature(sig, dgst, pk.X[:], pk.Y[:])
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Sign() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("Sign_64bit() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
@@ -703,7 +694,8 @@ func TestGenerateSM2KeyForDH1(t *testing.T) {
 			publicBY, _ := hex.DecodeString(tt.args.publicBY)
 			randBGBytes, _ := hex.DecodeString(tt.args.RB)
 			randBGBytes = bytes.Join([][]byte{{0x04}, randBGBytes}, nil)
-			RB := new(SM2PublicKey).FromBytes(randBGBytes)
+			RB := new(SM2PublicKey)
+			assert.Nil(t, RB.FromBytes(randBGBytes, 0))
 			got, got1, got2, err := GenerateSM2KeyForDH(idA, idB, randA, new(big.Int).SetBytes(privateKeyBytes), new(big.Int).SetBytes(publicAX), new(big.Int).SetBytes(publicAY), new(big.Int).SetBytes(publicBX), new(big.Int).SetBytes(publicBY), RB, tt.args.isinit)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GenerateSM2KeyForDH() error = %v, wantErr %v", err, tt.wantErr)
@@ -753,4 +745,25 @@ func TestName(t *testing.T) {
 		fmt.Printf("0x%d,", in[i])
 	}
 	fmt.Println(len(in))
+}
+
+func printBytes(in []byte) {
+	ret := "[]byte{"
+	for _, v := range in {
+		ret += fmt.Sprintf("0x%02x, ", v)
+	}
+	ret += "}"
+	fmt.Println(ret)
+}
+
+func TestGetSM3IDHasher(t *testing.T) {
+	var rander32 = bytes.NewBuffer(bytes.Repeat([]byte("1"), 128))
+	k, _ := GenerateSM2Key()
+	priv, _ := k.Bytes()
+	pub, _ := k.PublicKey.Bytes()
+	printBytes(priv)
+	printBytes(pub)
+	s, err := k.Sign(nil, []byte("flato"), rander32)
+	assert.Nil(t, err)
+	printBytes(s)
 }

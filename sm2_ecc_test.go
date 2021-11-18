@@ -18,8 +18,10 @@ func TestCrypt(t *testing.T) {
 	var err error
 	vk, _ := hex.DecodeString(privateKey)
 	pk, _ := hex.DecodeString(pubKey)
-	testKey := new(SM2PrivateKey).FromBytes(vk)
-	testPubKey := new(SM2PublicKey).FromBytes(pk)
+	testKey := new(SM2PrivateKey)
+	assert.Nil(t, testKey.FromBytes(vk, 0))
+	testPubKey := new(SM2PublicKey)
+	assert.Nil(t, testPubKey.FromBytes(pk, 0))
 
 	out, err := Encrypt(testPubKey, message, rand.Reader)
 	if err != nil {
@@ -41,7 +43,8 @@ const cipherText = `0409332fadf1804bb892d3d5851dd2414eb0f8363ae79688c0afd23581fa
 func TestDecrypt(t *testing.T) {
 	c, _ := hex.DecodeString(cipherText)
 	vk, _ := hex.DecodeString(privateKey)
-	testKey := new(SM2PrivateKey).FromBytes(vk)
+	testKey := new(SM2PrivateKey)
+	assert.Nil(t, testKey.FromBytes(vk, 0))
 	out, err := Decrypt(testKey, c)
 	assert.Nil(t, err)
 	assert.Equal(t, string(out), "123456789012345678901234567890123456")

@@ -1,30 +1,42 @@
 package sm3
 
 import (
-	"encoding/binary"
+	"encoding/base64"
+	"fmt"
 	"hash"
 )
 
 const (
-	blockSize = 64
-	sumSize   = 32
+	blockSize     = 64
+	blockSizeMask = 0x3f
+	sumSize       = 32
 )
 
 //SM3 to hash msg
 type SM3 struct {
-	digest    [8]uint32 // digest represents the partial evaluation of V
-	length    uint64    // length of the message
-	unhandled []byte    // uint8
+	unhandledLength int
+	digest          [8]uint32       // digest represents the partial evaluation of V
+	length          uint64          // length of the message
+	unhandled       [blockSize]byte // uint8
 }
 
-func (sm3 *SM3) pad() []byte {
-	msg := make([]byte, len(sm3.unhandled), 128)
-	copy(msg, sm3.unhandled[:])
+//Debug printf state of sm3
+func (sm3 *SM3) Debug() string {
+	return fmt.Sprintf("length:%v, digest: %x,%x,%x,%x,%x,%x,%x,%x\nunhandled:%v", sm3.length,
+		sm3.digest[0], sm3.digest[1], sm3.digest[2], sm3.digest[3], sm3.digest[4], sm3.digest[5], sm3.digest[6], sm3.digest[7],
+		base64.StdEncoding.EncodeToString(sm3.unhandled[:sm3.unhandledLength]))
+}
+
+func (sm3 *SM3) pad(msg []byte) []byte {
+	copy(msg, sm3.unhandled[:sm3.unhandledLength])
 	msg = append(msg, 0x80) // append bit '1'
 
-	for len(msg)%blockSize != 56 {
-		msg = append(msg, 0x00)
+	appendlength := 56 - len(msg)&blockSizeMask
+	if appendlength < 0 {
+		appendlength += blockSize
 	}
+	msg = msg[:len(msg)+appendlength]
+
 	// append message length
 	msg = append(msg, uint8(sm3.length>>56&0xff))
 	msg = append(msg, uint8(sm3.length>>48&0xff))
@@ -34,9 +46,6 @@ func (sm3 *SM3) pad() []byte {
 	msg = append(msg, uint8(sm3.length>>16&0xff))
 	msg = append(msg, uint8(sm3.length>>8&0xff))
 	msg = append(msg, uint8(sm3.length>>0&0xff))
-	if len(msg)%64 != 0 {
-		panic("error msgLen")
-	}
 	return msg
 }
 
@@ -73,7 +82,7 @@ func (sm3 *SM3) Reset() {
 	sm3.digest[7] = 0xb0fb0e4e
 
 	sm3.length = 0
-	sm3.unhandled = []byte{}
+	sm3.unhandledLength = 0
 }
 
 //Write required by the hash.Hash interface.
@@ -86,25 +95,27 @@ func (sm3 *SM3) Write(p []byte) (int, error) {
 		return toWrite, nil
 	}
 	sm3.length += uint64(len(p) << 3)
-	length := len(p) + len(sm3.unhandled)
+	length := len(p) + sm3.unhandledLength
 	if length < 64 {
-		sm3.unhandled = append(sm3.unhandled, p...)
+		copy(sm3.unhandled[sm3.unhandledLength:], p)
+		sm3.unhandledLength = length
 		return toWrite, nil
 	}
 
 	nBlocks := length >> 6
-	rest := len(sm3.unhandled) % 4
+	rest := sm3.unhandledLength % 4
 	if rest != 0 && len(p) >= (4-rest) {
-		sm3.unhandled = append(sm3.unhandled[:], p[:4-rest]...)
-		update(&sm3.digest, sm3.unhandled, p[4-rest:])
-
+		copy(sm3.unhandled[sm3.unhandledLength:], p[:4-rest])
+		sm3.unhandledLength += 4 - rest
+		update(&sm3.digest, sm3.unhandled[:sm3.unhandledLength], p[4-rest:])
 	} else {
-		//fmt.Println("update 2", &sm3.unhandled[0], &p[0])
-		update(&sm3.digest, sm3.unhandled, p)
+		update(&sm3.digest, sm3.unhandled[:sm3.unhandledLength], p)
 	}
 
 	// Update unhandled
-	sm3.unhandled = p[len(p)-(length-(nBlocks<<6)):]
+	sm3.unhandledLength = length - (nBlocks << 6)
+	unHandleLength := len(p) - sm3.unhandledLength
+	copy(sm3.unhandled[:], p[unHandleLength:])
 	return toWrite, nil
 }
 
@@ -118,32 +129,31 @@ func (sm3 *SM3) resetWithDefaultID() {
 	sm3.digest[6] = 0xcf9117c8
 	sm3.digest[7] = 0x4707011d
 	sm3.length = 1168
-	sm3.unhandled = []byte{
+	sm3.unhandled = [64]byte{
 		0x21, 0x53, 0xD0, 0xA9, 0x87, 0x7C, 0xC6, 0x2A,
 		0x47, 0x40, 0x02, 0xDF, 0x32, 0xE5, 0x21, 0x39,
 		0xF0, 0xA0,
 	}
+	sm3.unhandledLength = 18
 }
 
 // Sum appends the current hash to in and returns the resulting slice. if cap(in) -len(in) >= 32,
 //otherwise the it will not change ,and you can get hash from return value
 func (sm3 *SM3) Sum(in []byte) []byte {
-
-	msg := sm3.pad()
+	msg := make([]byte, sm3.unhandledLength, 128)
+	msg = sm3.pad(msg)
 
 	// final
 	update(&sm3.digest, msg, []byte{})
 
-	// save hash to in
-	needed := sm3.Size()
-	if cap(in)-len(in) < needed {
-		in = make([]byte, needed)
-	} else {
-		in = in[len(in) : len(in)+needed]
+	var ret []byte
+	if cap(in)-len(in) < 32 {
+		ret = make([]byte, len(in), 32+len(in))
+		copy(ret, in)
+		in = ret
 	}
-
-	for i := 0; i < 8; i++ {
-		binary.BigEndian.PutUint32(in[i*4:], sm3.digest[i])
+	for _, v := range sm3.digest {
+		in = append(in, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
 	}
 	return in
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/cipher"
 	"errors"
+	"fmt"
 	"github.com/meshplus/crypto-gm/internal/sm4"
 	"io"
 )
@@ -54,6 +55,9 @@ func Sm4EncryptCBC(key, originMsg []byte, randReader io.Reader) ([]byte, error) 
 
 //Sm4DecryptCBC decrypt with sm4, use CBC mode with iv
 func Sm4DecryptCBC(key, src []byte) ([]byte, error) {
+	if len(src) < 16 {
+		return nil, fmt.Errorf("cipher text is too short")
+	}
 	iv := make([]byte, 16)
 	en := make([]byte, len(src)-16)
 	copy(iv, src[0:16])
