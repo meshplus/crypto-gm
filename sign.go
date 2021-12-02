@@ -20,14 +20,20 @@ func NewSM2() *SM2 {
 
 //Sign get signature to digest, K is the private key
 func (sv *SM2) Sign(k []byte, digest []byte, _ io.Reader) (signature []byte, err error) {
-	return new(SM2PrivateKey).FromBytes(k).CalculatePublicKey().Sign(rand.Reader, digest, nil)
+	key := new(SM2PrivateKey)
+	err = key.FromBytes(k, 0)
+	if err != nil {
+		return nil, errors.New("is not sm2 sign key")
+	}
+	return key.CalculatePublicKey().Sign(nil, digest, rand.Reader)
 }
 
 //Verify verify signature ,K is the public key
 func (sv *SM2) Verify(k []byte, signature, digest []byte) (valid bool, err error) {
-	pk := new(SM2PublicKey).FromBytes(k)
-	if pk == nil {
-		return false, errors.New("is not sm2 public key")
+	pk := new(SM2PublicKey)
+	err = pk.FromBytes(k, 0)
+	if err != nil {
+		return false, errors.New("is not sm2 verify key")
 	}
 	return pk.Verify(nil, signature, digest)
 }

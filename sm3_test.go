@@ -54,7 +54,7 @@ func TestHashBeforeSM2(t *testing.T) {
 			key := new(SM2PrivateKey)
 			keyByte, err := hex.DecodeString(tt.key)
 			assert.Nil(t, err)
-			key.FromBytes(keyByte)
+			assert.Nil(t, key.FromBytes(keyByte, 0))
 			key.CalculatePublicKey()
 			hash := HashBeforeSM2(&key.PublicKey, []byte(msg))
 			assert.Equal(t, hex.EncodeToString(hash), tt.hash)

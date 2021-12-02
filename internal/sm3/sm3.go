@@ -1,10 +1,9 @@
-//+build arm64 darwin mips64le
-
 package sm3
 
 import "encoding/binary"
 
-func update(digest *[8]uint32, msg, end []byte) {
+//nolint
+func update_32bit(digest *[8]uint32, msg, end []byte) {
 	var w [68]uint32
 	var w1 [64]uint32
 	//note 为了兼容64为的接口，在64为情况下这样操作可以节省一次append

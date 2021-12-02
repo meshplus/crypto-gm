@@ -2,11 +2,12 @@ package gm
 
 import (
 	"bytes"
-	"crypto"
+	std "crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"errors"
+	"github.com/meshplus/crypto"
 	"github.com/meshplus/crypto-gm/internal/sm2"
 	"github.com/meshplus/crypto-gm/internal/sm3"
 	"io"
@@ -104,12 +105,21 @@ func (key *SM2PrivateKey) Bytes() ([]byte, error) {
 }
 
 //FromBytes parse a private Key from bytes, Inverse method of Bytes()
-func (key *SM2PrivateKey) FromBytes(k []byte) *SM2PrivateKey {
+func (key *SM2PrivateKey) FromBytes(k []byte, opt int) error {
 	if len(k) == 0 || len(k) > 32 {
-		return nil
+		return errors.New("key length is empty or too long")
 	}
 	copy(key.K[sm2KeyLen-len(k):], k)
-	return key
+	return nil
+}
+
+//Sign get signature of specific digest by SM2PrivateKey self,so the first parameter will be ignored
+func (key *SM2PrivateKey) Sign(k, digest []byte, reader io.Reader) ([]byte, error) {
+	if _, ok := reader.(crypto.FlagReader); ok {
+		return key.SignBatch(k, digest, reader)
+	}
+	sign, _, err := sm2.Sign(digest, reader, key.K[:])
+	return sign, err
 }
 
 //SetPublicKey Set the public key contained in the private key
@@ -134,33 +144,17 @@ func (key *SM2PrivateKey) CalculatePublicKey() *SM2PrivateKey {
 	return key
 }
 
-//Symmetric SM2 is a kind of asymmetric algorithm，so this method always return false.
-func (key *SM2PrivateKey) Symmetric() bool {
-	return false
-}
-
-//Private SM2PrivateKey represent private key of SM2, so this method always return true.
-func (key *SM2PrivateKey) Private() bool {
-	return true
-}
-
 //Public Get SM2PublicKey from a SM2PrivateKey, if SM2PublicKey is empty, this method will invoke CalculatePublicKey().
-func (key *SM2PrivateKey) Public() crypto.PublicKey {
+func (key *SM2PrivateKey) Public() std.PublicKey {
 	if key.PublicKey.X == zeroKey || key.PublicKey.Y == zeroKey {
 		key.CalculatePublicKey()
 	}
 	return &key.PublicKey
 }
 
-//Sign get signature of specific digest by SM2PrivateKey self,so the first parameter will be ignored
-func (key *SM2PrivateKey) Sign(reader io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	sign, _, err := sm2.Sign(digest, reader, key.K[:])
-	return sign, err
-}
-
 //SignBatch get signature of specific digest by SM2PrivateKey self,so the first parameter will be ignored
 //first bytes is flag
-func (key *SM2PrivateKey) SignBatch(reader io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
+func (key *SM2PrivateKey) SignBatch(k, digest []byte, reader io.Reader) ([]byte, error) {
 	sign, flag, err := sm2.Sign(digest, reader, key.K[:])
 	ret := make([]byte, len(sign)+1)
 	ret[0] = flag
@@ -177,9 +171,9 @@ type SM2PublicKey struct {
 }
 
 //FromBytes Parse a public key from 65 bytes and specific algorithm.The reverse method of Bytes()
-func (key *SM2PublicKey) FromBytes(k []byte) *SM2PublicKey {
+func (key *SM2PublicKey) FromBytes(k []byte, opt int) error {
 	if len(k) != 65 {
-		return nil
+		return errors.New("key length is not 65")
 	}
 	//check is on Curve
 	x, y := new(big.Int).SetBytes(k[1:33]), new(big.Int).SetBytes(k[33:])
@@ -190,13 +184,11 @@ func (key *SM2PublicKey) FromBytes(k []byte) *SM2PublicKey {
 	copy(key.X[:], k[1:33])
 	copy(key.Y[:], k[33:])
 	key.Curve = sm2.Sm2()
-
-	return key
+	return nil
 }
 
 //Bytes return key bytes
 func (key *SM2PublicKey) Bytes() ([]byte, error) {
-
 	r := make([]byte, 65)
 	r[0] = 0x04 // uncompressed point
 	copy(r[1:33], key.X[:])
@@ -204,17 +196,7 @@ func (key *SM2PublicKey) Bytes() ([]byte, error) {
 	return r, nil
 }
 
-//Symmetric SM2 is a kind of asymmetric algorithm，so this method always return false.
-func (key *SM2PublicKey) Symmetric() bool {
-	return false
-}
-
-//Private SM2PublicKey represent public key of SM2, so this method always return false.
-func (key *SM2PublicKey) Private() bool {
-	return false
-}
-
-//PublicKey return pointer to self
-func (key *SM2PublicKey) PublicKey() (*SM2PublicKey, error) {
-	return key, nil
+// Verify verify the signature by SM2PublicKey self, so the first parameter will be ignored.
+func (key *SM2PublicKey) Verify(_, signature, digest []byte) (valid bool, err error) {
+	return sm2.VerifySignature(signature, digest, key.X[:], key.Y[:])
 }

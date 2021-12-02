@@ -1,4 +1,4 @@
-package sm2
+package internal
 
 import (
 	"bytes"
@@ -709,7 +709,7 @@ func sm2ReduceDegree(a *sm2FieldElement, b *sm2LargeFieldElement) {
 
 // X = a * R mod P
 func sm2FromBig(X *sm2FieldElement, a *big.Int) {
-	x := new(big.Int).Lsh(a, 257)
+	x := GetInt().Lsh(a, 257)
 	x.Mod(x, sm2.P)
 	for i := 0; i < 9; i++ {
 		if bits := x.Bits(); len(bits) > 0 {
@@ -729,6 +729,7 @@ func sm2FromBig(X *sm2FieldElement, a *big.Int) {
 		}
 		x.Rsh(x, 28)
 	}
+	PutInt(x)
 }
 
 // X = a * R mod N
@@ -758,7 +759,7 @@ func sm2FromBigOrder(X *sm2FieldElement, a *big.Int) {
 // X = r * R mod P
 // r = X * R' mod P
 func sm2ToBig(X *sm2FieldElement) *big.Int {
-	r, tm := new(big.Int), new(big.Int)
+	r, tm := new(big.Int), GetInt()
 	r.SetInt64(int64(X[8]))
 	for i := 7; i >= 0; i-- {
 		if (i & 1) == 0 {
@@ -771,6 +772,7 @@ func sm2ToBig(X *sm2FieldElement) *big.Int {
 	}
 	r.Mul(r, sm2RInverse)
 	r.Mod(r, sm2.P)
+	PutInt(tm)
 	return r
 }
 

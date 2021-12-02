@@ -11,6 +11,30 @@ type Hasher struct {
 	dirty bool
 }
 
+func (h *Hasher) Write(p []byte) (n int, err error) {
+	return h.inner.Write(p)
+}
+
+//Sum hash sum
+func (h *Hasher) Sum(b []byte) []byte {
+	return h.inner.Sum(b)
+}
+
+//Reset hash reset
+func (h *Hasher) Reset() {
+	h.inner.Reset()
+}
+
+//Size hash size
+func (h *Hasher) Size() int {
+	return h.inner.Size()
+}
+
+//BlockSize hash block size
+func (h *Hasher) BlockSize() int {
+	return h.inner.BlockSize()
+}
+
 //NewSM3Hasher instruct a SM# Hasher
 func NewSM3Hasher() *Hasher {
 	return &Hasher{

@@ -108,4 +108,4 @@ download : http://nexus.hyperchain.cn/repository/arch/cuda/libsm2cuda.so
 
 ## License
 
-LGPL © Ultramesh
+crypto-gm is currently under Apache 2.0 license. See the LICENSE file for details.

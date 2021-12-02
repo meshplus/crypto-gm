@@ -1,8 +1,13 @@
-package sm2
+package internal
+
+import _ "unsafe"
 
 // 0    | 1    | 2    | 3  | 4    | 4+xl  | 5+xl | 6+xl
 // 0x30 | xy+4 | 0x02 | xl | ____ | 0x02  | yl   | ____
-func marshal(x, y []byte) []byte {
+
+//MarshalSig marshal
+//go:linkname MarshalSig github.com/meshplus/crypto-gm/internal/sm2.MarshalSig
+func MarshalSig(x, y []byte) []byte {
 	offset := 0
 	for ; x[offset] == byte(0); offset++ {
 	}
@@ -29,7 +34,9 @@ func marshal(x, y []byte) []byte {
 	return out
 }
 
-func unMarshal(in []byte) (x []byte, y []byte) {
+//Unmarshal unmarshal
+//go:linkname Unmarshal github.com/meshplus/crypto-gm/internal/sm2.Unmarshal
+func Unmarshal(in []byte) (x []byte, y []byte) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -48,12 +55,4 @@ func unMarshal(in []byte) (x []byte, y []byte) {
 	y = y[offset:]
 
 	return x, y
-}
-
-func MarshalSig(x, y []byte) []byte {
-	return marshal(x, y)
-}
-
-func Unmarshal(in []byte) ([]byte, []byte) {
-	return unMarshal(in)
 }
